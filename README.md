@@ -16,6 +16,10 @@ pip install torch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 --index-url https
 pip install -U xformers --index-url https://download.pytorch.org/whl/cu118
 ```
 
+```bash
+pip install diffusers["torch"] transformers
+```
+
 <hr>
 
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
