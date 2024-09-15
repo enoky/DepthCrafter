@@ -1,3 +1,6 @@
+This fork of DepthCrafter has batch processing using run_batch.py
+
+
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
 <img src='https://depthcrafter.github.io/img/logo.png' style="height:140px"></img>
