@@ -5,7 +5,8 @@ This fork of DepthCrafter has batch processing using run_batch.py
 The utils.py file has been updated to force aspect ratio scale to match source
 <hr>
 </div>
-## Note: PyCharm IDE is highly recommended: https://www.jetbrains.com/pycharm/
+## Note: Run inside PyCharm IDE (highly recommended):
+<hr>
 ## Required Dependencies (NVIDIA):
 
 ```bash
