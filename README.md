@@ -1,4 +1,4 @@
-## ___***This fork of DepthCrafter has batch processing using run_batch.py***___
+<center>## ___***This fork of DepthCrafter has batch processing using run_batch.py***___</center>
 
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
