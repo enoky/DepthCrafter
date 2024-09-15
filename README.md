@@ -1,5 +1,10 @@
-## ___***This fork of DepthCrafter has batch processing using run_batch.py
-the utils.py file has been updated to force aspect ratio scale to match source***___
+<div align="center">
+<hr>
+This fork of DepthCrafter has batch processing using run_batch.py
+<br>
+The utils.py file has been updated to force aspect ratio scale to match source
+<hr>
+</div>
 
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
