@@ -13,15 +13,11 @@ The utils.py file has been updated to force aspect ratio scale to match source
 ## Required Dependencies (NVIDIA):
 
 ```bash
-pip install torch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118
 ```
 
 ```bash
 pip install -U xformers --index-url https://download.pytorch.org/whl/cu118
-```
-
-```bash
-pip install diffusers["torch"] transformers
 ```
 
 <hr>
