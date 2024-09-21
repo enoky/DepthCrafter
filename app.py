@@ -41,7 +41,7 @@ def construct_demo():
         )
         # demo
         depthcrafter_demo = DepthCrafterDemo(
-            unet_path="tencent/DepthCrafter",
+            unet_path="model",
             pre_train_path="stabilityai/stable-video-diffusion-img2vid-xt",
         )
 
