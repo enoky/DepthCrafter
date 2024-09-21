@@ -146,7 +146,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--unet-path",
         type=str,
-        default="tencent/DepthCrafter",
+        default="model",
         help="Path to the UNet model",
     )
     parser.add_argument(
