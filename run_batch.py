@@ -134,7 +134,7 @@ if __name__ == "__main__":
     # `num_inference_steps`, `guidance_scale`, and `max_res`
     parser = argparse.ArgumentParser(description="DepthCrafter")
     parser.add_argument(
-        "--directory", type=str, default="./examples/scenes", help="Path to the directory with video files"
+        "--directory", type=str, default="./examples", help="Path to the directory with video files"
     )
     parser.add_argument(
         "--save-folder",
