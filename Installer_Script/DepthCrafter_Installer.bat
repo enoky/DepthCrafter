@@ -32,7 +32,7 @@ REM Set environment variable before cloning
 set GIT_CLONE_PROTECTION_ACTIVE=false
 
 REM Clone the DepthCrafter repository
-git clone https://github.com/Tencent/DepthCrafter.git
+git clone https://github.com/enoky/DepthCrafter.git
 if %errorlevel% neq 0 (
     echo Failed to clone the DepthCrafter repository.
     pause
