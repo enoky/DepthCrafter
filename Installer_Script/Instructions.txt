@@ -3,12 +3,13 @@ INSTRUCTIONS FOR USING THE DEPTHCRAFTER INSTALLER
 
 1. PREREQUISITES:
    - GIT: Ensure Git is installed and added to your system’s PATH.
-     You can check this by running:
+     Download here: https://git-scm.com/downloads/win
+     You can check the installation by running the command:
        git --version
      If it shows a version, Git is installed and on PATH.
    
    - PYTHON: Ensure Python 3.7 or above is installed and added to your PATH.
-     You can check by running:
+     You can check by running the command:
        python --version
 
 2. SCRIPT PREPARATION:
