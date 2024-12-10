@@ -1,4 +1,5 @@
-## This fork of DepthCrafter v1.0.1 has added GUI for simple usage
+## This fork of DepthCrafter v1.0.1 has added GUI with "batch processing" enabled.
+
 
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
