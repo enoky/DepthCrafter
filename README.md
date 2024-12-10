@@ -1,3 +1,5 @@
+## This fork of DepthCrafter v1.0.1 has added GUI for simple usage: Double-click "run_gui.bat" to launch in Windows.
+
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
 <img src='https://depthcrafter.github.io/img/logo.png' style="height:140px"></img>
