@@ -1,0 +1,47 @@
+INSTRUCTIONS FOR USING THE DEPTHCRAFTER INSTALLER
+-----------------------------------------------
+
+1. PREREQUISITES:
+   - GIT: Ensure Git is installed and added to your system’s PATH.
+     You can check this by running:
+       git --version
+     If it shows a version, Git is installed and on PATH.
+   
+   - PYTHON: Ensure Python 3.7 or above is installed and added to your PATH.
+     You can check by running:
+       python --version
+
+2. SCRIPT PREPARATION:
+   Place the "DepthCrafter_Installer.bat" file in the folder where you want
+   to clone the repository and set up the environment.
+
+3. RUNNING THE INSTALLER:
+   Open a Command Prompt window and navigate to the directory where 
+   DepthCrafter_Installer.bat is located. For example:
+     cd D:\my_apps
+   Then run:
+     DepthCrafter_Installer.bat
+
+4. USER PROMPTS:
+   If the "DepthCrafter" directory already exists, the installer will 
+   ask if you want to remove it.
+   Type Y (then Enter) to remove and continue, or N (then Enter) to abort.
+
+5. INSTALLATION PROCESS:
+   The script will:
+   - Clone the DepthCrafter repository.
+   - Create and activate a Python virtual environment.
+   - Install dependencies (including torch, torchvision, torchaudio, and xformers).
+
+6. COMPLETION:
+   If everything installs successfully, you will see:
+     All dependencies installed successfully.
+   After this message, the environment is set up and ready for use.
+
+7. TROUBLESHOOTING:
+   - If errors occur, verify that Git and Python are in your PATH.
+   - Ensure you are running the installer from a Command Prompt, 
+     not by double-clicking the batch file.
+   - Check your internet connection if cloning or package installation fails.
+
+You are now ready to use DepthCrafter with the installed environment!
