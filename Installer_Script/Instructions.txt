@@ -9,6 +9,7 @@ INSTRUCTIONS FOR USING THE DEPTHCRAFTER INSTALLER
      If it shows a version, Git is installed and on PATH.
    
    - PYTHON: Ensure Python 3.7 or above is installed and added to your PATH.
+     Download here: https://www.python.org/downloads
      You can check by running the command:
        python --version
 
