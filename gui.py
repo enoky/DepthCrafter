@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import cv2
 
 from diffusers.training_utils import set_seed
 from depthcrafter.depth_crafter_ppl import DepthCrafterPipeline
@@ -36,8 +37,19 @@ class DepthCrafterDemo:
         self.pipe.enable_attention_slicing()
 
     def infer(self, video, num_denoising_steps, guidance_scale, save_folder, window_size, process_length, overlap, max_res, seed):
+        # Get original video dimensions
+        cap = cv2.VideoCapture(video)
+        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        # Set seed
         set_seed(seed)
+
+        # Read frames resized so that width = max_res
         frames, target_fps = read_video_frames(video, process_length, -1, max_res, "open")
+
+        # Run the pipeline
         with torch.inference_mode():
             res = self.pipe(
                 frames,
@@ -49,11 +61,33 @@ class DepthCrafterDemo:
                 window_size=window_size,
                 overlap=overlap,
             ).frames[0]
+
+        # Depth normalization
         res = res.sum(-1) / res.shape[-1]
         res = (res - res.min()) / (res.max() - res.min())
+
+        # Invert the depth so foreground is lighter than background
+        res = 1.0 - res
+
+        # Determine final output dimensions to maintain original aspect ratio
+        final_width = max_res
+        aspect_ratio = orig_w / orig_h
+        final_height = int(round(final_width / aspect_ratio))
+
+        # Convert and resize frames
+        t, h, w = res.shape
+        res_uint8 = (res * 255).astype(np.uint8)
+
+        resized_frames = []
+        for i in range(t):
+            frame_resized = cv2.resize(res_uint8[i], (final_width, final_height), interpolation=cv2.INTER_LINEAR)
+            resized_frames.append(frame_resized)
+        resized_frames = np.stack(resized_frames, axis=0)
+
+        # Save the video
         save_path = os.path.join(save_folder, os.path.splitext(os.path.basename(video))[0])
         os.makedirs(save_folder, exist_ok=True)
-        save_video(res, save_path + "_depth.mp4", fps=target_fps)
+        save_video(resized_frames, save_path + "_depth.mp4", fps=target_fps)
         return save_path + "_depth.mp4"
 
     def run(self, video, **kwargs):
@@ -152,7 +186,6 @@ class DepthCrafterGUI:
             for ext in ["*.mp4", "*.avi", "*.mov", "*.mkv"]:
                 videos = glob.glob(os.path.join(self.input_dir.get(), ext))
                 finished_folder = os.path.join(self.input_dir.get(), "finished")
-                # Ensure the 'finished' folder exists
                 os.makedirs(finished_folder, exist_ok=True)
                 for video in videos:
                     self.log_message(f"Processing: {video}")
@@ -171,7 +204,6 @@ class DepthCrafterGUI:
             self.log_message("Processing complete!")
         except Exception as e:
             messagebox.showerror("Error", str(e))
-
 
 
 if __name__ == "__main__":
