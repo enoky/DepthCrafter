@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import cv2
 
 from diffusers.training_utils import set_seed
 from depthcrafter.depth_crafter_ppl import DepthCrafterPipeline
@@ -37,9 +38,22 @@ class DepthCrafterDemo:
 
     def infer(self, video, num_denoising_steps, guidance_scale, save_folder, window_size, process_length, overlap, max_res, seed):
         set_seed(seed)
+
+        # Get original video dimensions to maintain aspect ratio after processing
+        cap = cv2.VideoCapture(video)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video file: {video}")
+        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        original_aspect_ratio = original_width / original_height
+
+        # Process frames with the pipeline
         frames, target_fps = read_video_frames(video, process_length, -1, max_res, "open")
+
         with torch.inference_mode():
-            res = self.pipe(
+            out = self.pipe(
                 frames,
                 height=frames.shape[1],
                 width=frames.shape[2],
@@ -49,8 +63,24 @@ class DepthCrafterDemo:
                 window_size=window_size,
                 overlap=overlap,
             ).frames[0]
-        res = res.sum(-1) / res.shape[-1]
+
+        # Convert to single-channel depth map and normalize
+        res = out.sum(-1) / out.shape[-1]
         res = (res - res.min()) / (res.max() - res.min())
+
+        # Resize the output to maintain original aspect ratio
+        # Horizontal resolution stays max_res, vertical is adjusted to match aspect ratio
+        new_width = max_res
+        new_height = int(new_width / original_aspect_ratio)
+        num_frames = res.shape[0]
+
+        res_resized = np.zeros((num_frames, new_height, new_width), dtype=res.dtype)
+        for i in range(num_frames):
+            frame_resized = cv2.resize(res[i], (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+            res_resized[i] = frame_resized
+        res = res_resized
+
+        # Save the final video
         save_path = os.path.join(save_folder, os.path.splitext(os.path.basename(video))[0])
         os.makedirs(save_folder, exist_ok=True)
         save_video(res, save_path + "_depth.mp4", fps=target_fps)
@@ -171,7 +201,6 @@ class DepthCrafterGUI:
             self.log_message("Processing complete!")
         except Exception as e:
             messagebox.showerror("Error", str(e))
-
 
 
 if __name__ == "__main__":
