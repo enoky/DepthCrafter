@@ -1,5 +1,8 @@
 ## This fork of DepthCrafter v1.0.1 has added GUI for batch video processing
 
+For simple installation, see these instructions: https://github.com/enoky/DepthCrafter/blob/main/Installer_Script/Instructions.txt
+<br>
+<hr>
 
 ## ___***DepthCrafter: Generating Consistent Long Depth Sequences for Open-world Videos***___
 <div align="center">
