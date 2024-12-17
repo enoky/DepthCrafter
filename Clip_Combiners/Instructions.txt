@@ -1,3 +1,0 @@
-Make sure to check this line in the Depthmap_Combiner.bat script and change the 'scale=960:400' to half the resolution of your source clips. It's currently set to half of 1920:800 for typical cropped source clips.
-
-ffmpeg -i "%%f" -vf scale=960:400 -c:v h264_nvenc -cq 16 -preset medium "%temp_folder%\scaled_%%~nf.mp4"
