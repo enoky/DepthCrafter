@@ -1,0 +1,1 @@
+Put `Depthmap_Combiner.bat` in your output folder and run to combine all clips into a single MP4.
