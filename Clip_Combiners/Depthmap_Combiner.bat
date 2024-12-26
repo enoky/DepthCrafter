@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 REM Define the output video name
-set output_video=combined_video.mp4
+set output_video=combined_depthmap.mp4
 
 REM Delete existing file_list.txt if it exists
 if exist file_list.txt del file_list.txt
