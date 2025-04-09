@@ -10,6 +10,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import queue
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers.models.transformers.transformer_2d")
+
 from diffusers.training_utils import set_seed
 from depthcrafter.depth_crafter_ppl import DepthCrafterPipeline
 from depthcrafter.unet import DiffusersUNetSpatioTemporalConditionModelDepthCrafter
@@ -324,7 +327,7 @@ class DepthCrafterGUI:
                 self.guidance_scale.set(config.get("guidance_scale", 1.0))
                 self.inference_steps.set(config.get("inference_steps", 5))
                 self.window_size.set(config.get("window_size", 110))
-                self.max_res.set(config.get("max_res", 1024))
+                self.max_res.set(config.get("max_res", 960))
                 self.overlap.set(config.get("overlap", 25))
                 self.seed.set(config.get("seed", 42))
                 self.cpu_offload.set(config.get("cpu_offload", "model"))
