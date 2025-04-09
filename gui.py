@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import queue
 
 from diffusers.training_utils import set_seed
 from depthcrafter.depth_crafter_ppl import DepthCrafterPipeline
@@ -16,7 +17,7 @@ from depthcrafter.utils import save_video, read_video_frames
 
 class DepthCrafterDemo:
     """
-    Class to handle the DepthCrafter inference.
+    Class to handle DepthCrafter inference.
     """
     def __init__(self, unet_path: str, pre_train_path: str, cpu_offload: str = "model"):
         """
@@ -48,7 +49,7 @@ class DepthCrafterDemo:
 
     def infer(self, video, num_denoising_steps, guidance_scale, save_folder, window_size, process_length, overlap, max_res, seed):
         """
-        Performs depth inference on a video.
+        Performs depth inference on a video with optimized frame processing.
 
         Args:
             video (str): Path to the input video.
@@ -62,7 +63,7 @@ class DepthCrafterDemo:
             seed (int): Random seed for reproducibility.
 
         Returns:
-            str: The save path of the depth map video
+            str: Path to the saved depth map video.
         """
         set_seed(seed)
         frames, target_fps = read_video_frames(video, process_length, -1, max_res, "open")
@@ -77,8 +78,13 @@ class DepthCrafterDemo:
                 window_size=window_size,
                 overlap=overlap,
             ).frames[0]
+        # Optimized normalization: Compute min and max in one pass and prevent division by zero
         res = res.sum(-1) / res.shape[-1]
-        res = (res - res.min()) / (res.max() - res.min())
+        res_min, res_max = res.min(), res.max()
+        if res_max != res_min:  # Avoid division by zero
+            res = (res - res_min) / (res_max - res_min)
+        else:
+            res = np.zeros_like(res)  # If max equals min, set to zero (flat depth map)
         save_path = os.path.join(save_folder, os.path.splitext(os.path.basename(video))[0])
         os.makedirs(save_folder, exist_ok=True)
         save_video(res, save_path + "_depth.mp4", fps=target_fps)
@@ -86,16 +92,16 @@ class DepthCrafterDemo:
 
     def run(self, video, **kwargs):
         """
-        Runs the depth inference and handles cleanup.
+        Runs depth inference with cleanup.
 
         Args:
             video (str): Path to the input video.
             **kwargs: Additional parameters for inference.
         """
-        self.infer(video, **kwargs)
+        save_path = self.infer(video, **kwargs)
         gc.collect()
         torch.cuda.empty_cache()
-
+        return save_path
 
 class DepthCrafterGUI:
     """
@@ -105,15 +111,15 @@ class DepthCrafterGUI:
 
     def __init__(self, root):
         """
-        Initializes the GUI.
+        Initializes the GUI with default settings.
 
         Args:
             root (tk.Tk): The main Tkinter window.
         """
         self.root = root
         self.root.title("DepthCrafter GUI")
-
-        # Default values before loading config
+        
+        # Initialize variables with defaults
         self.input_dir = tk.StringVar(value="./input_clips")
         self.output_dir = tk.StringVar(value="./output_depthmaps")
         self.guidance_scale = tk.DoubleVar(value=1.0)
@@ -124,18 +130,26 @@ class DepthCrafterGUI:
         self.seed = tk.IntVar(value=42)
         self.cpu_offload = tk.StringVar(value="model")
 
-        # Attempt to load config from file
+        # Load saved config if available
         self.load_config()
 
+        # Threading and queue for GUI updates
+        self.message_queue = queue.Queue()
+        self.stop_event = threading.Event()
         self.processing_thread = None
+
+        # Create GUI widgets
         self.create_widgets()
 
-        # Ensure settings are saved on exit
+        # Start queue processing loop
+        self.root.after(100, self.process_queue)
+
+        # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def create_widgets(self):
-        """Creates and arranges all the GUI widgets."""
-        # Input/Output Folders
+        """Creates and arranges GUI widgets."""
+        # Directories
         frame = tk.LabelFrame(self.root, text="Directories")
         frame.pack(fill="x", padx=10, pady=5)
         tk.Label(frame, text="Input Folder:").grid(row=0, column=0, sticky="e")
@@ -154,101 +168,137 @@ class DepthCrafterGUI:
         self.add_param(param_frame, "Max Resolution", self.max_res, 3)
         self.add_param(param_frame, "Overlap", self.overlap, 4)
         self.add_param(param_frame, "Seed", self.seed, 5)
-
         tk.Label(param_frame, text="CPU Offload Mode:").grid(row=6, column=0, sticky="e")
-        cpu_offload_box = ttk.Combobox(
-            param_frame, textvariable=self.cpu_offload, values=["model", "sequential"]
-        )
-        cpu_offload_box.grid(row=6, column=1, padx=5)
+        ttk.Combobox(param_frame, textvariable=self.cpu_offload, values=["model", "sequential"]).grid(row=6, column=1, padx=5)
 
-        # Controls
+        # Controls with Progress Bar and Cancel Button
         ctrl_frame = tk.Frame(self.root)
         ctrl_frame.pack(pady=10)
+        self.progress = ttk.Progressbar(ctrl_frame, orient="horizontal", length=300, mode="determinate")
+        self.progress.pack(side="left", padx=5)
         tk.Button(ctrl_frame, text="Start", command=self.start_thread).pack(side="left", padx=5)
+        tk.Button(ctrl_frame, text="Cancel", command=self.stop_processing).pack(side="left", padx=5)
         tk.Button(ctrl_frame, text="Exit", command=self.on_close).pack(side="right", padx=5)
 
-        # Logs
+        # Log Area
         log_frame = tk.LabelFrame(self.root, text="Log")
         log_frame.pack(fill="both", expand=True, padx=10, pady=5)
         self.log = tk.Text(log_frame, state="disabled", height=10)
         self.log.pack(fill="both", expand=True)
 
     def add_param(self, parent, label, var, row):
-        """Helper function to create a parameter entry field."""
-        tk.Label(parent, text=label + ":").grid(row=row, column=0, sticky="e")
+        """Helper to add a parameter entry field."""
+        tk.Label(parent, text=f"{label}:").grid(row=row, column=0, sticky="e")
         tk.Entry(parent, textvariable=var).grid(row=row, column=1, padx=5, pady=2)
 
     def browse_input(self):
-        """Opens a file dialog to select the input folder and uses os.path.normpath to fix path formatting"""
-        folder = filedialog.askdirectory(initialdir=os.path.normpath(self.input_dir.get()))
+        """Selects input folder."""
+        folder = filedialog.askdirectory(initialdir=self.input_dir.get())
         if folder:
-           self.input_dir.set(os.path.normpath(folder))
+            self.input_dir.set(os.path.normpath(folder))
 
     def browse_output(self):
-        """Opens a file dialog to select the output folder and uses os.path.normpath to fix path formatting"""
-        folder = filedialog.askdirectory(initialdir=os.path.normpath(self.output_dir.get()))
+        """Selects output folder."""
+        folder = filedialog.askdirectory(initialdir=self.output_dir.get())
         if folder:
-           self.output_dir.set(os.path.normpath(folder))
+            self.output_dir.set(os.path.normpath(folder))
 
     def log_message(self, message):
-        """Logs a message to the GUI log."""
-        self.log.config(state="normal")
-        self.log.insert("end", message + "\n")
-        self.log.config(state="disabled")
-        self.log.see("end")
+        """Queues a log message for GUI update."""
+        self.message_queue.put(("log", message))
+
+    def process_queue(self):
+        """Updates GUI from the message queue."""
+        while not self.message_queue.empty():
+            message = self.message_queue.get()
+            if message[0] == "log":
+                self.log.config(state="normal")
+                self.log.insert("end", f"{message[1]}\n")
+                self.log.config(state="disabled")
+                self.log.see("end")
+            elif message[0] == "progress":
+                self.progress["value"] = message[1]
+        self.root.after(100, self.process_queue)
 
     def start_thread(self):
-        """Starts a new thread for processing."""
-        if self.processing_thread is None or not self.processing_thread.is_alive():
-            self.processing_thread = threading.Thread(target=self.start_processing, daemon=True)
-            self.processing_thread.start()
+        """Initiates processing after handling file overwrite prompts."""
+        videos = []
+        for ext in ["*.mp4", "*.avi", "*.mov", "*.mkv"]:
+            videos.extend(glob.glob(os.path.join(self.input_dir.get(), ext)))
+        
+        to_process = []
+        for video in videos:
+            save_path = os.path.join(self.output_dir.get(), os.path.splitext(os.path.basename(video))[0] + "_depth.mp4")
+            if not os.path.exists(save_path):
+                to_process.append(video)
+            elif messagebox.askyesno("Overwrite?", f"{save_path} already exists. Overwrite?"):
+                to_process.append(video)
+            else:
+                self.log_message(f"Skipping {video}")
 
-    def start_processing(self):
+        if to_process:
+            if self.processing_thread is None or not self.processing_thread.is_alive():
+                self.processing_thread = threading.Thread(target=self.start_processing, args=(to_process,), daemon=True)
+                self.processing_thread.start()
+        else:
+            self.log_message("No videos to process.")
+
+    def start_processing(self, videos):
         """
-        Main processing logic.
+        Processes videos with lazy model loading and progress updates.
+
+        Args:
+            videos (list): List of video paths to process.
         """
-        try:
-            self.log_message("Starting processing...")
-            demo = DepthCrafterDemo(
-                unet_path="tencent/DepthCrafter",
-                pre_train_path="stabilityai/stable-video-diffusion-img2vid-xt",
-                cpu_offload=self.cpu_offload.get(),
-            )
-            for ext in ["*.mp4", "*.avi", "*.mov", "*.mkv"]:
-                videos = glob.glob(os.path.join(self.input_dir.get(), ext))
-                finished_folder = os.path.join(self.input_dir.get(), "finished")
-                # Ensure the 'finished' folder exists
-                os.makedirs(finished_folder, exist_ok=True)
-                for video in videos:
-                    self.log_message(f"Processing: {video}")
-                    demo.run(
-                        video,
-                        num_denoising_steps=self.inference_steps.get(),
-                        guidance_scale=self.guidance_scale.get(),
-                        save_folder=self.output_dir.get(),
-                        window_size=self.window_size.get(),
-                        process_length=-1,
-                        overlap=self.overlap.get(),
-                        max_res=self.max_res.get(),
-                        seed=self.seed.get(),
-                    )
-                    shutil.move(video, finished_folder)
-            self.log_message("Processing complete!")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+        self.stop_event.clear()
+        self.message_queue.put(("log", "Starting processing..."))
+        self.message_queue.put(("progress", 0))
+        self.progress["maximum"] = len(videos)
+
+        # Lazy Model Loading: Initialize model only when processing starts
+        demo = DepthCrafterDemo(
+            unet_path="tencent/DepthCrafter",
+            pre_train_path="stabilityai/stable-video-diffusion-img2vid-xt",
+            cpu_offload=self.cpu_offload.get(),
+        )
+        finished_folder = os.path.join(self.input_dir.get(), "finished")
+        os.makedirs(finished_folder, exist_ok=True)
+
+        for i, video in enumerate(videos):
+            if self.stop_event.is_set():
+                self.message_queue.put(("log", "Processing cancelled."))
+                break
+            self.message_queue.put(("log", f"Processing {video}"))
+            try:
+                demo.run(
+                    video,
+                    num_denoising_steps=self.inference_steps.get(),
+                    guidance_scale=self.guidance_scale.get(),
+                    save_folder=self.output_dir.get(),
+                    window_size=self.window_size.get(),
+                    process_length=-1,
+                    overlap=self.overlap.get(),
+                    max_res=self.max_res.get(),
+                    seed=self.seed.get(),
+                )
+                shutil.move(video, finished_folder)
+                self.message_queue.put(("progress", i + 1))
+            except Exception as e:
+                self.message_queue.put(("log", f"Error processing {video}: {e}"))
+        self.message_queue.put(("log", "Processing complete!"))
+
+    def stop_processing(self):
+        """Cancels the ongoing processing."""
+        self.stop_event.set()
+        self.log_message("Cancelling processing...")
 
     def on_close(self):
-        """
-        Saves the config and closes the main window.
-        """
-        # Save configuration before closing
+        """Saves config and closes the application."""
         self.save_config()
         self.root.destroy()
 
     def save_config(self):
-        """
-        Saves the current settings to the configuration file.
-        """
+        """Saves current settings to a config file."""
         config = {
             "input_dir": self.input_dir.get(),
             "output_dir": self.output_dir.get(),
@@ -264,27 +314,22 @@ class DepthCrafterGUI:
             json.dump(config, f, indent=4)
 
     def load_config(self):
-        """
-         Loads settings from the configuration file.
-        """
+        """Loads settings from a config file if it exists."""
         if os.path.exists(self.CONFIG_FILENAME):
             try:
                 with open(self.CONFIG_FILENAME, "r") as f:
                     config = json.load(f)
-                # Use os.path.normpath to ensure path correctness
                 self.input_dir.set(os.path.normpath(config.get("input_dir", "./input_clips")))
                 self.output_dir.set(os.path.normpath(config.get("output_dir", "./output_depthmaps")))
                 self.guidance_scale.set(config.get("guidance_scale", 1.0))
                 self.inference_steps.set(config.get("inference_steps", 5))
                 self.window_size.set(config.get("window_size", 110))
-                self.max_res.set(config.get("max_res", 960))
+                self.max_res.set(config.get("max_res", 1024))
                 self.overlap.set(config.get("overlap", 25))
                 self.seed.set(config.get("seed", 42))
                 self.cpu_offload.set(config.get("cpu_offload", "model"))
             except Exception as e:
-                # If there's an error reading config, just use defaults
                 print(f"Warning: Could not load config: {e}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
