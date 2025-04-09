@@ -91,7 +91,7 @@ if %errorlevel% neq 0 (
 )
 
 REM Install specific PyTorch
-python -m pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+python -m pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 if %errorlevel% neq 0 (
     echo Failed to install PyTorch packages.
     pause
@@ -99,7 +99,7 @@ if %errorlevel% neq 0 (
 )
 
 REM Install additional packages
-python -m pip install -U xformers --index-url https://download.pytorch.org/whl/cu124
+python -m pip install -U xformers --index-url https://download.pytorch.org/whl/cu126
 if %errorlevel% neq 0 (
     echo Failed to install xformers.
     pause
