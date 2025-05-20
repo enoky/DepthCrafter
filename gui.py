@@ -10,6 +10,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import queue
 
+# Enable cuDNN benchmarking for better convolution performance
+torch.backends.cudnn.benchmark = True
+
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers.models.transformers.transformer_2d")
 
@@ -167,8 +170,8 @@ class DepthCrafterGUI:
         param_frame.pack(fill="x", padx=10, pady=5)
         self.add_param(param_frame, "Guidance Scale", self.guidance_scale, 0)
         self.add_param(param_frame, "Inference Steps", self.inference_steps, 1)
-        self.add_param(param_frame, "Window Size", self.window_size, 2)
-        self.add_param(param_frame, "Max Resolution", self.max_res, 3)
+        self.add_dropdown(param_frame, "Window Size", self.window_size, ["70", "90", "110"], 2)
+        self.add_dropdown(param_frame, "Max Resolution", self.max_res, ["576", "640", "704", "768", "832", "896", "960", "1024", "1088"], 3)
         self.add_param(param_frame, "Overlap", self.overlap, 4)
         self.add_param(param_frame, "Seed", self.seed, 5)
         tk.Label(param_frame, text="CPU Offload Mode:").grid(row=6, column=0, sticky="e")
@@ -193,6 +196,16 @@ class DepthCrafterGUI:
         """Helper to add a parameter entry field."""
         tk.Label(parent, text=f"{label}:").grid(row=row, column=0, sticky="e")
         tk.Entry(parent, textvariable=var).grid(row=row, column=1, padx=5, pady=2)
+
+    def add_dropdown(self, parent, label, var, values, row):
+        """Helper to add a parameter dropdown menu."""
+        tk.Label(parent, text=f"{label}:").grid(row=row, column=0, sticky="e")
+        combo = ttk.Combobox(parent, textvariable=var, values=values, state="readonly")
+        combo.grid(row=row, column=1, padx=5, pady=2)
+        try:
+            combo.current(values.index(str(var.get())))
+        except ValueError:
+            combo.current(0)  # Set to first value if current value not in list
 
     def browse_input(self):
         """Selects input folder."""
