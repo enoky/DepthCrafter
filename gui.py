@@ -10,9 +10,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import queue
 
-# Enable cuDNN benchmarking for better convolution performance
-torch.backends.cudnn.benchmark = True
-
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers.models.transformers.transformer_2d")
 
@@ -25,7 +22,7 @@ class DepthCrafterDemo:
     """
     Class to handle DepthCrafter inference.
     """
-    def __init__(self, unet_path: str, pre_train_path: str, cpu_offload: str = "model"):
+    def __init__(self, unet_path: str, pre_train_path: str, cpu_offload: str = "model", use_cudnn_benchmark: bool = True):
         """
         Initializes the DepthCrafter pipeline.
 
@@ -33,7 +30,9 @@ class DepthCrafterDemo:
             unet_path (str): Path to the UNet model.
             pre_train_path (str): Path to the pre-trained model.
             cpu_offload (str, optional): CPU offload strategy ('model', 'sequential'). Defaults to "model".
+            use_cudnn_benchmark (bool, optional): Enable cuDNN benchmarking. Defaults to True.
         """
+        torch.backends.cudnn.benchmark = use_cudnn_benchmark
         unet = DiffusersUNetSpatioTemporalConditionModelDepthCrafter.from_pretrained(
             unet_path,
             low_cpu_mem_usage=True,
@@ -84,13 +83,12 @@ class DepthCrafterDemo:
                 window_size=window_size,
                 overlap=overlap,
             ).frames[0]
-        # Optimized normalization: Compute min and max in one pass and prevent division by zero
         res = res.sum(-1) / res.shape[-1]
         res_min, res_max = res.min(), res.max()
-        if res_max != res_min:  # Avoid division by zero
+        if res_max != res_min:
             res = (res - res_min) / (res_max - res_min)
         else:
-            res = np.zeros_like(res)  # If max equals min, set to zero (flat depth map)
+            res = np.zeros_like(res)
         save_path = os.path.join(save_folder, os.path.splitext(os.path.basename(video))[0])
         os.makedirs(save_folder, exist_ok=True)
         save_video(res, save_path + "_depth.mp4", fps=target_fps)
@@ -125,37 +123,27 @@ class DepthCrafterGUI:
         self.root = root
         self.root.title("DepthCrafter GUI")
         
-        # Initialize variables with defaults
         self.input_dir = tk.StringVar(value="./input_clips")
         self.output_dir = tk.StringVar(value="./output_depthmaps")
         self.guidance_scale = tk.DoubleVar(value=1.0)
         self.inference_steps = tk.IntVar(value=5)
-        self.window_size = tk.IntVar(value=110)
+        self.window_size = tk.IntVar(value=70)
         self.max_res = tk.IntVar(value=960)
         self.overlap = tk.IntVar(value=25)
         self.seed = tk.IntVar(value=42)
         self.cpu_offload = tk.StringVar(value="model")
+        self.use_cudnn_benchmark = tk.BooleanVar(value=True)
 
-        # Load saved config if available
         self.load_config()
-
-        # Threading and queue for GUI updates
         self.message_queue = queue.Queue()
         self.stop_event = threading.Event()
         self.processing_thread = None
-
-        # Create GUI widgets
         self.create_widgets()
-
-        # Start queue processing loop
         self.root.after(100, self.process_queue)
-
-        # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def create_widgets(self):
         """Creates and arranges GUI widgets."""
-        # Directories
         frame = tk.LabelFrame(self.root, text="Directories")
         frame.pack(fill="x", padx=10, pady=5)
         tk.Label(frame, text="Input Folder:").grid(row=0, column=0, sticky="e")
@@ -165,7 +153,6 @@ class DepthCrafterGUI:
         tk.Entry(frame, textvariable=self.output_dir, width=50).grid(row=1, column=1)
         tk.Button(frame, text="Browse", command=self.browse_output).grid(row=1, column=2)
 
-        # Parameters
         param_frame = tk.LabelFrame(self.root, text="Parameters")
         param_frame.pack(fill="x", padx=10, pady=5)
         self.add_param(param_frame, "Guidance Scale", self.guidance_scale, 0)
@@ -176,8 +163,9 @@ class DepthCrafterGUI:
         self.add_param(param_frame, "Seed", self.seed, 5)
         tk.Label(param_frame, text="CPU Offload Mode:").grid(row=6, column=0, sticky="e")
         ttk.Combobox(param_frame, textvariable=self.cpu_offload, values=["model", "sequential"]).grid(row=6, column=1, padx=5)
+        tk.Label(param_frame, text="Enable cuDNN Benchmark:").grid(row=7, column=0, sticky="e")
+        tk.Checkbutton(param_frame, variable=self.use_cudnn_benchmark).grid(row=7, column=1, padx=5, sticky="w")
 
-        # Controls with Progress Bar and Cancel Button
         ctrl_frame = tk.Frame(self.root)
         ctrl_frame.pack(pady=10)
         self.progress = ttk.Progressbar(ctrl_frame, orient="horizontal", length=300, mode="determinate")
@@ -186,7 +174,6 @@ class DepthCrafterGUI:
         tk.Button(ctrl_frame, text="Cancel", command=self.stop_processing).pack(side="left", padx=5)
         tk.Button(ctrl_frame, text="Exit", command=self.on_close).pack(side="right", padx=5)
 
-        # Log Area
         log_frame = tk.LabelFrame(self.root, text="Log")
         log_frame.pack(fill="both", expand=True, padx=10, pady=5)
         self.log = tk.Text(log_frame, state="disabled", height=10)
@@ -205,7 +192,7 @@ class DepthCrafterGUI:
         try:
             combo.current(values.index(str(var.get())))
         except ValueError:
-            combo.current(0)  # Set to first value if current value not in list
+            combo.current(0)
 
     def browse_input(self):
         """Selects input folder."""
@@ -271,11 +258,11 @@ class DepthCrafterGUI:
         self.message_queue.put(("progress", 0))
         self.progress["maximum"] = len(videos)
 
-        # Lazy Model Loading: Initialize model only when processing starts
         demo = DepthCrafterDemo(
             unet_path="tencent/DepthCrafter",
             pre_train_path="stabilityai/stable-video-diffusion-img2vid-xt",
             cpu_offload=self.cpu_offload.get(),
+            use_cudnn_benchmark=self.use_cudnn_benchmark.get(),
         )
         finished_folder = os.path.join(self.input_dir.get(), "finished")
         os.makedirs(finished_folder, exist_ok=True)
@@ -325,6 +312,7 @@ class DepthCrafterGUI:
             "overlap": self.overlap.get(),
             "seed": self.seed.get(),
             "cpu_offload": self.cpu_offload.get(),
+            "use_cudnn_benchmark": self.use_cudnn_benchmark.get(),
         }
         with open(self.CONFIG_FILENAME, "w") as f:
             json.dump(config, f, indent=4)
@@ -339,11 +327,12 @@ class DepthCrafterGUI:
                 self.output_dir.set(os.path.normpath(config.get("output_dir", "./output_depthmaps")))
                 self.guidance_scale.set(config.get("guidance_scale", 1.0))
                 self.inference_steps.set(config.get("inference_steps", 5))
-                self.window_size.set(config.get("window_size", 110))
+                self.window_size.set(config.get("window_size", 70))
                 self.max_res.set(config.get("max_res", 960))
                 self.overlap.set(config.get("overlap", 25))
                 self.seed.set(config.get("seed", 42))
                 self.cpu_offload.set(config.get("cpu_offload", "model"))
+                self.use_cudnn_benchmark.set(config.get("use_cudnn_benchmark", True))
             except Exception as e:
                 print(f"Warning: Could not load config: {e}")
 
